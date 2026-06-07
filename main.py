@@ -2,8 +2,7 @@ from regipy.registry import RegistryHive
 import argparse
 import os
 import re
-import subprocess
-
+import configparser
 
 def format_adapter_mac_for_linux(adapter_mac: str) -> str:
     raw = adapter_mac.strip().upper()
@@ -21,6 +20,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--adapter', help='The MAC address of the Bluetooth adapter to copy keys for')
 parser.add_argument('--device', help='The MAC address of the Bluetooth device to copy keys for')
 parser.add_argument('--target', help='The MAC address of the target Bluetooth device to copy keys to')
+parser.add_argument('--dry-run', action='store_true', help='Print the actions that would be taken without actually performing them')
 args = parser.parse_args()
 
 print("Loading registry hive...")
@@ -102,7 +102,9 @@ except PermissionError:
     exit(1)
 
 # Find the target device
-target_device = device_key.name
+source_device = device_key.name
+source_mac_linux = format_adapter_mac_for_linux(source_device)
+target_device = source_device
 if args.target is not None:
     target_device = args.target
 target_mac_linux = format_adapter_mac_for_linux(target_device)
@@ -112,4 +114,29 @@ if target_mac_linux not in target_devices:
     for device in target_devices:
         print(device)
     exit(1)
-print(f"Found target Bluetooth device with MAC address {target_mac_linux}")
+info_file = configparser.ConfigParser()
+info_file.read(os.path.join(adapter_bt_folder, target_mac_linux, "info"))
+if "General" not in info_file or "Name" not in info_file["General"]:
+    print(f"Could not read device name from info file for target Bluetooth device with MAC address {target_mac_linux}")
+    exit(1)
+device_name = info_file["General"]["Name"]
+print(f"Found target Bluetooth device {device_name} with MAC address {target_mac_linux}")
+
+# Rename the folder, if necessary
+if target_mac_linux != source_mac_linux:
+    source_folder = os.path.join(adapter_bt_folder, source_mac_linux)
+    target_folder = os.path.join(adapter_bt_folder, target_mac_linux)
+    if os.path.exists(source_folder):
+        print(f"Source folder already exists: {source_folder}")
+        print("Please remove or rename the existing folder before running this script.")
+        exit(1)
+    try:
+        if not args.dry_run:
+            os.rename(target_folder, source_folder)
+            print(f"Renamed Bluetooth adapter folder from {target_folder} to {source_folder}")
+        else:
+            print(f"Would rename Bluetooth adapter folder from {target_folder} to {source_folder}")
+    except Exception as e:
+        print(f"Failed to rename Bluetooth adapter folder: {e}")
+        exit(1)
+
