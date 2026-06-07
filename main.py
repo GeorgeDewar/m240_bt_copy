@@ -3,6 +3,7 @@ import argparse
 import os
 import re
 import configparser
+import subprocess
 
 def format_adapter_mac_for_linux(adapter_mac: str) -> str:
     raw = adapter_mac.strip().upper()
@@ -21,7 +22,23 @@ def update_key(info_file, key_name, key_value):
     if args.dry_run:
         print(f"Would update {key_name}")
     else:
-        info_file[key_name]["Key"] = key_value.hex()
+        info_file[key_name]["Key"] = key_value.upper()
+
+def restart_bluetooth_service():
+    if args.dry_run:
+        print("Would restart bluetooth.service")
+        return
+    print("Restarting bluetooth.service...")
+    try:
+        subprocess.run(["systemctl", "restart", "bluetooth.service"], check=True)
+        print("Successfully restarted bluetooth.service")
+    except FileNotFoundError:
+        print("systemctl not found. Unable to restart bluetooth.service automatically.")
+        print("Please restart it manually.")
+        exit(1)
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to restart bluetooth.service: {e}")
+        exit(1)
 
 parser = argparse.ArgumentParser(
                     prog='m240_bt_copy',
@@ -124,6 +141,7 @@ if target_mac_linux not in target_devices:
         print(device)
     exit(1)
 info_file = configparser.ConfigParser()
+info_file.optionxform = str  # preserve case of keys
 info_file.read(os.path.join(adapter_bt_folder, target_mac_linux, "info"))
 if "General" not in info_file or "Name" not in info_file["General"]:
     print(f"Could not read device name from info file for target Bluetooth device with MAC address {target_mac_linux}")
@@ -143,7 +161,7 @@ for key_name, key_value in keys.items():
 if not args.dry_run:
     print(f"Saving updated info file")
     with open(os.path.join(adapter_bt_folder, target_mac_linux, "info"), "w") as f:
-        info_file.write(f)
+        info_file.write(f, space_around_delimiters=False)
 else:
     print(f"Would save updated info file")
 
@@ -164,4 +182,6 @@ if target_mac_linux != source_mac_linux:
     except Exception as e:
         print(f"Failed to rename Bluetooth adapter folder: {e}")
         exit(1)
+
+#restart_bluetooth_service()
 
