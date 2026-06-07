@@ -14,6 +14,15 @@ def format_adapter_mac_for_linux(adapter_mac: str) -> str:
         f"Invalid adapter MAC address '{adapter_mac}'. Expected format like 70:CD:0D:C7:F6:72"
     )
 
+def update_key(info_file, key_name, key_value):
+    if key_name not in info_file:
+        print(f"Info file for target Bluetooth device does not have a {key_name} field")
+        exit(1)
+    if args.dry_run:
+        print(f"Would update {key_name}")
+    else:
+        info_file[key_name]["Key"] = key_value.hex()
+
 parser = argparse.ArgumentParser(
                     prog='m240_bt_copy',
                     description='Copies Bluetooth keys from a Windows registry hive')
@@ -121,6 +130,22 @@ if "General" not in info_file or "Name" not in info_file["General"]:
     exit(1)
 device_name = info_file["General"]["Name"]
 print(f"Found target Bluetooth device {device_name} with MAC address {target_mac_linux}")
+
+# Update the keys in the target device's info file
+for key_name, key_value in keys.items():
+    if key_name == "IRK":
+        update_key(info_file, "IdentityResolvingKey", key_value)
+    elif key_name == "LTK":
+        update_key(info_file, "PeripheralLongTermKey", key_value)
+        update_key(info_file, "SlaveLongTermKey", key_value)
+    else:
+        print(f"Unknown key type '{key_name}'")
+if not args.dry_run:
+    print(f"Saving updated info file")
+    with open(os.path.join(adapter_bt_folder, target_mac_linux, "info"), "w") as f:
+        info_file.write(f)
+else:
+    print(f"Would save updated info file")
 
 # Rename the folder, if necessary
 if target_mac_linux != source_mac_linux:
