@@ -8,13 +8,14 @@ parser.add_argument('--adapter', help='The MAC address of the Bluetooth adapter 
 parser.add_argument('--device', help='The MAC address of the Bluetooth device to copy keys for')
 args = parser.parse_args()
 
+print("Loading registry hive...")
 reg_path = "/mnt/windows/Windows/System32/config/SYSTEM"
 reg = RegistryHive(reg_path)
 
 # Find the Bluetooth adapter
 bt = reg.get_key('\ControlSet001\Services\BTHPORT\Parameters\Keys')
 if bt.subkey_count == 0:
-    print("No Bluetooth adapters found in the registry hive")
+    print("No Bluetooth adapters found")
     exit(1)
 elif args.adapter is not None:
     adapter_key = None
@@ -23,15 +24,15 @@ elif args.adapter is not None:
             adapter_key = subkey
             break
     if adapter_key is None:
-        print(f"Could not find Bluetooth adapter with MAC address {args.adapter} in the registry hive")
+        print(f"Could not find Bluetooth adapter with MAC address {args.adapter}")
         exit(1)
-    print(f"Found Bluetooth adapter with MAC address {args.adapter} in the registry hive. Copying keys...")
+    print(f"Found Bluetooth adapter with MAC address {args.adapter}")
 elif bt.subkey_count == 1:
     
     adapter_key = bt.iter_subkeys().__next__()
-    print(f"Found one Bluetooth adapter in the registry hive: {adapter_key.name}")
+    print(f"Found one Bluetooth adapter: {adapter_key.name}")
 else:
-    print("Found multiple Bluetooth adapters in the registry hive. Please specify which one to copy keys for using the --adapter argument.")
+    print("Found multiple Bluetooth adapters. Please specify which one to copy keys for using the --adapter argument.")
     print("Available adapters:")
     for subkey in bt.iter_subkeys():
         print(subkey.name)
@@ -39,7 +40,7 @@ else:
 
 # Find the Bluetooth device
 if (adapter_key.subkey_count == 0):
-    print("No Bluetooth devices found for the specified adapter in the registry hive")
+    print("No Bluetooth devices found for the specified adapter")
     exit(1)
 elif args.device is not None:
     device_key = None
@@ -48,15 +49,25 @@ elif args.device is not None:
             device_key = subkey
             break
     if device_key is None:
-        print(f"Could not find Bluetooth device with MAC address {args.device} for the specified adapter in the registry hive")
+        print(f"Could not find Bluetooth device with MAC address {args.device} for the specified adapter")
         exit(1)
-    print(f"Found Bluetooth device with MAC address {args.device} for the specified adapter in the registry hive.")
+    print(f"Found Bluetooth device with MAC address {args.device} for the specified adapter")
 elif adapter_key.subkey_count == 1:
     device_key = adapter_key.iter_subkeys().__next__()
-    print(f"Found one Bluetooth device for the specified adapter in the registry hive: {device_key.name}")
+    print(f"Found one Bluetooth device for the specified adapter: {device_key.name}")
 else:
-    print("Found multiple Bluetooth devices for the specified adapter in the registry hive. Please specify which one to copy keys for using the --device argument.")
+    print("Found multiple Bluetooth devices for the specified adapter. Please specify which one to copy keys for using the --device argument.")
     print("Available devices:")
     for subkey in adapter_key.iter_subkeys():
         print(subkey.name)
     exit(1)
+
+# Extract the keys
+key_types = ["LTK", "IRK"]
+keys = {}
+for value in device_key.iter_values():
+    if value.name in key_types:
+        keys[value.name] = value.value
+print("Extracted Bluetooth keys:")
+for key_name, key_value in keys.items():
+    print(f"{key_name}: {key_value}")
